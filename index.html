@@ -640,16 +640,59 @@ async function saveCard() {
   const ces = card.querySelectorAll('[contenteditable]');
   ces.forEach(el => el.setAttribute('contenteditable', 'false'));
 
-  /* 포커스 해제 (포커스된 입력에 배경색이 들어가지 않도록) */
   document.activeElement?.blur();
-
-  /* 잠깐 기다려서 DOM 반영 */
   await new Promise(r => setTimeout(r, 80));
 
+  /* ── 핵심: 카드를 고정 너비 오프스크린 컨테이너에 복제해서 캡처 ── */
+  const CARD_W = 460;
+
+  // textarea/input 값을 div/span으로 미리 교체한 클론 생성
+  const clone = card.cloneNode(true);
+
+  // hide-on-save 제거
+  clone.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
+
+  // textarea.t-text → div
+  clone.querySelectorAll('textarea.t-text').forEach(ta => {
+    const orig = card.querySelector(`#${ta.closest('.tweet')?.id} .t-text`);
+    const val = orig ? orig.value : ta.textContent;
+    const div = document.createElement('div');
+    div.textContent = val;
+    div.style.cssText = `font-size:13px;line-height:1.5;color:#0F1419;font-family:inherit;width:100%;word-break:break-word;overflow-wrap:break-word;white-space:pre-wrap;min-height:20px;`;
+    ta.parentNode.replaceChild(div, ta);
+  });
+
+  // textarea.bio-ta → div
+  clone.querySelectorAll('textarea.bio-ta').forEach(ta => {
+    const orig = document.getElementById('bioEl');
+    const val = orig ? orig.value : '';
+    const div = document.createElement('div');
+    div.textContent = val || ta.getAttribute('placeholder') || '';
+    div.style.cssText = `font-size:14px;line-height:1.5;color:${val ? '#0F1419' : '#8B98A5'};font-family:inherit;width:100%;word-break:break-word;white-space:pre-wrap;margin-top:10px;`;
+    ta.parentNode.replaceChild(div, ta);
+  });
+
+  // input → span
+  clone.querySelectorAll('input.t-num, input.fol-num, input.t-time, input.meta-in').forEach(inp => {
+    const span = document.createElement('span');
+    span.textContent = inp.value;
+    const cs = getComputedStyle(inp);
+    span.style.cssText = `font-size:${cs.fontSize};color:${cs.color};font-family:${cs.fontFamily};font-weight:${cs.fontWeight};white-space:nowrap;`;
+    inp.parentNode.replaceChild(span, inp);
+  });
+
+  // 오프스크린 wrapper에 고정 너비로 삽입
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:${CARD_W}px;background:#fff;`;
+  clone.style.cssText = `width:${CARD_W}px;max-width:${CARD_W}px;border-radius:16px;overflow:hidden;border:1px solid #EFF3F4;background:#fff;`;
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
+  // 레이아웃 반영 대기
+  await new Promise(r => setTimeout(r, 120));
+
   try {
-    const cardW = card.offsetWidth;
-    const cardH = card.scrollHeight;
-    const canvas = await html2canvas(card, {
+    const canvas = await html2canvas(clone, {
       scale: 2,
       useCORS: true,
       allowTaint: true,
@@ -658,66 +701,11 @@ async function saveCard() {
       imageTimeout: 15000,
       removeContainer: true,
       foreignObjectRendering: false,
-      width: cardW,
-      height: cardH,
-      windowWidth: cardW,
-      onclone: (doc, el) => {
-        /* 카드 너비 고정 — PC에서 헤더 찌부 방지 */
-        const clonedCard = doc.getElementById('card');
-        if (clonedCard) clonedCard.style.width = cardW + 'px';
-
-        /* 클론된 문서에서도 hide-on-save 제거 */
-        doc.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
-
-        /* textarea.t-text → div 로 교체 (html2canvas가 textarea 내용을 잘라냄) */
-        doc.querySelectorAll('textarea.t-text').forEach(ta => {
-          const cs = getComputedStyle(ta);
-          const div = doc.createElement('div');
-          div.textContent = ta.value;
-          div.style.fontSize = cs.fontSize;
-          div.style.lineHeight = cs.lineHeight;
-          div.style.color = cs.color;
-          div.style.fontFamily = cs.fontFamily;
-          div.style.fontWeight = cs.fontWeight;
-          div.style.width = '100%';
-          div.style.wordBreak = 'break-word';
-          div.style.overflowWrap = 'break-word';
-          div.style.whiteSpace = 'pre-wrap';
-          div.style.minHeight = '20px';
-          ta.parentNode.replaceChild(div, ta);
-        });
-
-        /* textarea.bio-ta → div 로 교체 */
-        doc.querySelectorAll('textarea.bio-ta').forEach(ta => {
-          const cs = getComputedStyle(ta);
-          const div = doc.createElement('div');
-          div.textContent = ta.value;
-          div.style.fontSize = cs.fontSize;
-          div.style.lineHeight = cs.lineHeight;
-          div.style.color = ta.value ? cs.color : '#8B98A5';
-          div.style.fontFamily = cs.fontFamily;
-          div.style.width = '100%';
-          div.style.wordBreak = 'break-word';
-          div.style.whiteSpace = 'pre-wrap';
-          div.style.marginTop = '10px';
-          if (!ta.value) div.textContent = ta.placeholder;
-          ta.parentNode.replaceChild(div, ta);
-        });
-
-        /* input → span 교체 */
-        doc.querySelectorAll('input.t-num, input.fol-num, input.t-time, input.meta-in').forEach(inp => {
-          const cs = getComputedStyle(inp);
-          const span = doc.createElement('span');
-          span.textContent = inp.value;
-          span.style.fontSize = cs.fontSize;
-          span.style.color = cs.color;
-          span.style.fontFamily = cs.fontFamily;
-          span.style.fontWeight = cs.fontWeight;
-          span.style.whiteSpace = 'nowrap';
-          inp.parentNode.replaceChild(span, inp);
-        });
-      }
+      width: CARD_W,
+      windowWidth: CARD_W,
     });
+
+    document.body.removeChild(wrapper);
 
     /* 흰 여백 추가 */
     const PAD = 80;
@@ -738,6 +726,7 @@ async function saveCard() {
     }, 'image/png');
 
   } catch (err) {
+    document.body.removeChild(wrapper);
     console.error('Save failed:', err);
     showToast('⚠️ 저장 실패: ' + err.message, 5000);
   }
