@@ -317,7 +317,7 @@ textarea.pinput{resize:none;}
       <div class="pfield">
         <label class="plabel">커미션주 닉네임 <span style="color:var(--t3);font-weight:400;text-transform:none;letter-spacing:0">(헤더 상단 가운데)</span></label>
         <div style="display:flex;gap:8px;align-items:center;">
-        <input class="pinput" id="creditIn" placeholder="예: @nickname" style="flex:1" value="Dearhikoboshi" oninput="setCredit(this.value)">
+        <input class="pinput" id="creditIn" placeholder="예: @nickname" style="flex:1" oninput="setCredit(this.value)">
           <input type="color" id="creditColorPicker" value="#ffffff" title="글씨 색상"
             style="width:34px;height:34px;border:1px solid var(--bd);border-radius:7px;cursor:pointer;padding:2px;background:#F7F9F9;"
             oninput="setCreditColor(this.value)">
@@ -553,7 +553,7 @@ function setCredit(val) {
   }
 }
 // 기본값 바로 표시
-setCredit('Dearhikoboshi');
+// setCredit('Dearhikoboshi'); // 자동 표시 제거
 function setCreditColor(val) {
   document.getElementById('hdrCredit').style.setProperty('--credit-color', val);
 }
@@ -647,6 +647,8 @@ async function saveCard() {
   await new Promise(r => setTimeout(r, 80));
 
   try {
+    const cardW = card.offsetWidth;
+    const cardH = card.scrollHeight;
     const canvas = await html2canvas(card, {
       scale: 2,
       useCORS: true,
@@ -656,7 +658,14 @@ async function saveCard() {
       imageTimeout: 15000,
       removeContainer: true,
       foreignObjectRendering: false,
-      onclone: (doc) => {
+      width: cardW,
+      height: cardH,
+      windowWidth: cardW,
+      onclone: (doc, el) => {
+        /* 카드 너비 고정 — PC에서 헤더 찌부 방지 */
+        const clonedCard = doc.getElementById('card');
+        if (clonedCard) clonedCard.style.width = cardW + 'px';
+
         /* 클론된 문서에서도 hide-on-save 제거 */
         doc.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
 
