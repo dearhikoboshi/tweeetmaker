@@ -630,55 +630,33 @@ async function saveCard() {
   const ces = card.querySelectorAll('[contenteditable]');
   ces.forEach(el => el.setAttribute('contenteditable', 'false'));
   document.activeElement?.blur();
-  await new Promise(r => setTimeout(r, 80));
 
-  const cardW = card.getBoundingClientRect().width;
+  // PC면 카드를 모바일 너비(390px)로 잠깐 줄이기
   const isMobile = window.innerWidth <= 768;
+  const prevWidth = card.style.width;
+  const prevMaxWidth = card.style.maxWidth;
+  if (!isMobile) {
+    card.style.width = '390px';
+    card.style.maxWidth = '390px';
+  }
+
+  await new Promise(r => setTimeout(r, 100));
 
   try {
-    let canvas;
-
-    if (isMobile) {
-      // 모바일: 기존 방식 그대로
-      canvas = await html2canvas(card, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        imageTimeout: 15000,
-        removeContainer: true,
-        foreignObjectRendering: false,
-        onclone: (doc) => {
-          doc.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
-          replaceInputs(doc);
-        }
-      });
-
-    } else {
-      // PC: 카드 실제 렌더링 너비로 캡처 → 미리보기 그대로
-      const rect = card.getBoundingClientRect();
-      const actualW = Math.round(rect.width);
-
-      canvas = await html2canvas(card, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        imageTimeout: 15000,
-        removeContainer: true,
-        foreignObjectRendering: false,
-        width: actualW,
-        windowWidth: actualW,
-        onclone: (doc) => {
-          doc.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
-          const c = doc.getElementById('card');
-          if (c) { c.style.width = actualW + 'px'; c.style.maxWidth = actualW + 'px'; }
-          replaceInputs(doc);
-        }
-      });
-    }
+    const canvas = await html2canvas(card, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      imageTimeout: 15000,
+      removeContainer: true,
+      foreignObjectRendering: false,
+      onclone: (doc) => {
+        doc.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
+        replaceInputs(doc);
+      }
+    });
 
     // 흰 여백 추가
     const PAD = 80;
@@ -704,6 +682,10 @@ async function saveCard() {
   }
 
   // 복원
+  if (!isMobile) {
+    card.style.width = prevWidth;
+    card.style.maxWidth = prevMaxWidth;
+  }
   hideEls.forEach(el => { el.style.display = el.dataset.prev || ''; });
   ces.forEach(el => el.setAttribute('contenteditable', 'true'));
   btn.disabled = false; btn.textContent = 'PNG 저장';
