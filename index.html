@@ -633,19 +633,20 @@ async function saveCard() {
   ces.forEach(el => el.setAttribute('contenteditable', 'false'));
   document.activeElement?.blur();
 
-  // PC일 때만 380px로 줄여서 캡처
+  // 모바일/PC 모두 카드 현재 너비로 고정 후 캡처
   const isMobile = window.innerWidth <= 768;
   const prevWidth = card.style.width;
   const prevMaxWidth = card.style.maxWidth;
-  if (!isMobile) {
-    card.style.width = '380px';
-    card.style.maxWidth = '380px';
-    card.style.minWidth = '380px';
-  }
+  const prevMinWidth = card.style.minWidth;
 
-  // 레이아웃 반영 충분히 대기
+  // 현재 렌더링된 카드 너비 측정
+  const targetW = Math.round(card.getBoundingClientRect().width);
+  card.style.width = targetW + 'px';
+  card.style.maxWidth = targetW + 'px';
+  card.style.minWidth = targetW + 'px';
+
+  // 레이아웃 반영 대기
   await new Promise(r => setTimeout(r, 200));
-  // 한번 더 reflow 강제
   card.getBoundingClientRect();
 
   try {
@@ -691,11 +692,9 @@ async function saveCard() {
   }
 
   // 복원
-  if (!isMobile) {
-    card.style.width = prevWidth;
-    card.style.maxWidth = prevMaxWidth;
-    card.style.minWidth = '';
-  }
+  card.style.width = prevWidth;
+  card.style.maxWidth = prevMaxWidth;
+  card.style.minWidth = prevMinWidth;
   hideEls.forEach(el => { el.style.display = el.dataset.prev || ''; });
   ces.forEach(el => el.setAttribute('contenteditable', 'true'));
   btn.disabled = false; btn.textContent = 'PNG 저장';
