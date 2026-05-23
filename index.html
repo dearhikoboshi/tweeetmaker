@@ -631,18 +631,23 @@ async function saveCard() {
   ces.forEach(el => el.setAttribute('contenteditable', 'false'));
   document.activeElement?.blur();
 
-  // PC일 때만 390px로 줄여서 캡처
+  // PC일 때만 380px로 줄여서 캡처
   const isMobile = window.innerWidth <= 768;
   const prevWidth = card.style.width;
   const prevMaxWidth = card.style.maxWidth;
   if (!isMobile) {
     card.style.width = '380px';
     card.style.maxWidth = '380px';
+    card.style.minWidth = '380px';
   }
 
-  await new Promise(r => setTimeout(r, 100));
+  // 레이아웃 반영 충분히 대기
+  await new Promise(r => setTimeout(r, 200));
+  // 한번 더 reflow 강제
+  card.getBoundingClientRect();
 
   try {
+    const captureW = Math.round(card.getBoundingClientRect().width);
     const canvas = await html2canvas(card, {
       scale: 2,
       useCORS: true,
@@ -652,6 +657,8 @@ async function saveCard() {
       imageTimeout: 15000,
       removeContainer: true,
       foreignObjectRendering: false,
+      width: captureW,
+      windowWidth: captureW,
       onclone: (doc) => {
         doc.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
         replaceInputs(doc);
@@ -685,6 +692,7 @@ async function saveCard() {
   if (!isMobile) {
     card.style.width = prevWidth;
     card.style.maxWidth = prevMaxWidth;
+    card.style.minWidth = '';
   }
   hideEls.forEach(el => { el.style.display = el.dataset.prev || ''; });
   ces.forEach(el => el.setAttribute('contenteditable', 'true'));
