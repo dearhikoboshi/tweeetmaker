@@ -632,57 +632,53 @@ async function saveCard() {
   document.activeElement?.blur();
   await new Promise(r => setTimeout(r, 80));
 
-  // 카드 실제 너비 측정 (렌더링 완료 후)
   const cardW = card.getBoundingClientRect().width;
+  const isMobile = window.innerWidth <= 768;
 
   try {
-    const canvas = await html2canvas(card, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-      imageTimeout: 15000,
-      removeContainer: true,
-      foreignObjectRendering: false,
-      width: cardW,
-      windowWidth: cardW,
-      onclone: (doc) => {
-        // hide-on-save 숨기기
-        doc.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
+    let canvas;
 
-        // 클론 카드도 동일 너비로 맞추기 (헤더 찌부 방지)
-        const c = doc.getElementById('card');
-        if (c) {
-          c.style.width = cardW + 'px';
-          c.style.maxWidth = cardW + 'px';
+    if (isMobile) {
+      // 모바일: 기존 방식 그대로
+      canvas = await html2canvas(card, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        imageTimeout: 15000,
+        removeContainer: true,
+        foreignObjectRendering: false,
+        onclone: (doc) => {
+          doc.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
+          replaceInputs(doc);
         }
+      });
 
-        // textarea → div 교체
-        doc.querySelectorAll('textarea.t-text').forEach(ta => {
-          const div = doc.createElement('div');
-          div.textContent = ta.value;
-          div.style.cssText = 'font-size:13px;line-height:1.5;color:#0F1419;font-family:inherit;width:100%;word-break:break-word;overflow-wrap:break-word;white-space:pre-wrap;min-height:20px;';
-          ta.parentNode.replaceChild(div, ta);
-        });
-        doc.querySelectorAll('textarea.bio-ta').forEach(ta => {
-          const val = ta.value;
-          const div = doc.createElement('div');
-          div.textContent = val || ta.placeholder;
-          div.style.cssText = `font-size:14px;line-height:1.5;color:${val ? '#0F1419' : '#8B98A5'};font-family:inherit;width:100%;word-break:break-word;white-space:pre-wrap;margin-top:10px;`;
-          ta.parentNode.replaceChild(div, ta);
-        });
+    } else {
+      // PC: 카드 실제 렌더링 너비로 캡처 → 미리보기 그대로
+      const rect = card.getBoundingClientRect();
+      const actualW = Math.round(rect.width);
 
-        // input → span 교체
-        doc.querySelectorAll('input.t-num, input.fol-num, input.t-time, input.meta-in').forEach(inp => {
-          const span = doc.createElement('span');
-          span.textContent = inp.value;
-          const cs = getComputedStyle(inp);
-          span.style.cssText = `font-size:${cs.fontSize};color:${cs.color};font-family:${cs.fontFamily};font-weight:${cs.fontWeight};white-space:nowrap;`;
-          inp.parentNode.replaceChild(span, inp);
-        });
-      }
-    });
+      canvas = await html2canvas(card, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        imageTimeout: 15000,
+        removeContainer: true,
+        foreignObjectRendering: false,
+        width: actualW,
+        windowWidth: actualW,
+        onclone: (doc) => {
+          doc.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
+          const c = doc.getElementById('card');
+          if (c) { c.style.width = actualW + 'px'; c.style.maxWidth = actualW + 'px'; }
+          replaceInputs(doc);
+        }
+      });
+    }
 
     // 흰 여백 추가
     const PAD = 80;
@@ -712,4 +708,30 @@ async function saveCard() {
   ces.forEach(el => el.setAttribute('contenteditable', 'true'));
   btn.disabled = false; btn.textContent = 'PNG 저장';
 }
+
+// onclone용 (모바일)
+function replaceInputs(doc) {
+  doc.querySelectorAll('textarea.t-text').forEach(ta => {
+    const div = doc.createElement('div');
+    div.textContent = ta.value;
+    div.style.cssText = 'font-size:13px;line-height:1.5;color:#0F1419;font-family:inherit;width:100%;word-break:break-word;overflow-wrap:break-word;white-space:pre-wrap;min-height:20px;';
+    ta.parentNode.replaceChild(div, ta);
+  });
+  doc.querySelectorAll('textarea.bio-ta').forEach(ta => {
+    const val = ta.value;
+    const div = doc.createElement('div');
+    div.textContent = val || ta.placeholder;
+    div.style.cssText = `font-size:14px;line-height:1.5;color:${val ? '#0F1419' : '#8B98A5'};font-family:inherit;width:100%;word-break:break-word;white-space:pre-wrap;margin-top:10px;`;
+    ta.parentNode.replaceChild(div, ta);
+  });
+  doc.querySelectorAll('input.t-num, input.fol-num, input.t-time, input.meta-in').forEach(inp => {
+    const span = doc.createElement('span');
+    span.textContent = inp.value;
+    const cs = getComputedStyle(inp);
+    span.style.cssText = `font-size:${cs.fontSize};color:${cs.color};font-family:${cs.fontFamily};font-weight:${cs.fontWeight};white-space:nowrap;`;
+    inp.parentNode.replaceChild(span, inp);
+  });
+}
+
+
 </script>
