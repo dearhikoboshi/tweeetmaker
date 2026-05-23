@@ -26,7 +26,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .preview-label{font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;}
 
 /* CARD */
-.card{background:#fff;border:1px solid var(--bd);border-radius:16px;overflow:hidden;}
+.card{background:#fff;border:1px solid var(--bd);border-radius:16px;overflow:hidden;max-width:460px;width:100%;}
 
 /* 헤더 */
 .card-hdr{position:relative;width:100%;height:110px;background:#CFD9DE;overflow:hidden;cursor:pointer;}
@@ -317,7 +317,7 @@ textarea.pinput{resize:none;}
       <div class="pfield">
         <label class="plabel">커미션주 닉네임 <span style="color:var(--t3);font-weight:400;text-transform:none;letter-spacing:0">(헤더 상단 가운데)</span></label>
         <div style="display:flex;gap:8px;align-items:center;">
-          <input class="pinput" id="creditIn" placeholder="예: @nickname" style="flex:1" oninput="setCredit(this.value)">
+        <input class="pinput" id="creditIn" placeholder="예: @nickname" style="flex:1" value="Dearhikoboshi" oninput="setCredit(this.value)">
           <input type="color" id="creditColorPicker" value="#ffffff" title="글씨 색상"
             style="width:34px;height:34px;border:1px solid var(--bd);border-radius:7px;cursor:pointer;padding:2px;background:#F7F9F9;"
             oninput="setCreditColor(this.value)">
@@ -552,6 +552,8 @@ function setCredit(val) {
     wrap.style.display = 'none';
   }
 }
+// 기본값 바로 표시
+setCredit('Dearhikoboshi');
 function setCreditColor(val) {
   document.getElementById('hdrCredit').style.setProperty('--credit-color', val);
 }
