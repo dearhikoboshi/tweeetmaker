@@ -616,126 +616,252 @@ function applyCrop() {
   closeModal();
 }
 
-/* ────────────────────────────────────────────
-   저장: html2canvas로 미리보기 그대로 캡처
-   html2canvas는 페이지 로드 시 이미 로딩됨
-──────────────────────────────────────────── */
-async function saveCard() {
-  if (typeof html2canvas === 'undefined') {
-    showToast('⚠️ html2canvas 로딩 중입니다. 잠시 후 다시 눌러주세요.');
-    return;
+/* ── 저장: Canvas API 직접 그리기 (헤더 찌부 완전 해결) ── */
+function loadImg(src) {
+  return new Promise(res => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => res(img);
+    img.onerror = () => res(null);
+    img.src = src;
+  });
+}
+function rrect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+function drawWrapped(ctx, text, x, y, maxW, lh, color, font) {
+  if (!text) return 0;
+  ctx.fillStyle = color; ctx.font = font;
+  const tokens = text.match(/[\u1100-\uffff]|[^\s]+|\s+/g) || [text];
+  let line = '', lines = [];
+  for (const tok of tokens) {
+    const test = line + tok;
+    if (ctx.measureText(test).width > maxW && line !== '') { lines.push(line.trimEnd()); line = tok.trimStart(); }
+    else line = test;
   }
+  if (line.trim()) lines.push(line.trimEnd());
+  lines.forEach((l,i) => ctx.fillText(l, x, y + i*lh));
+  return lines.length;
+}
+function countLines(text, font, maxW) {
+  if (!text) return 0;
+  const mc = document.createElement('canvas').getContext('2d');
+  mc.font = font;
+  const tokens = text.match(/[\u1100-\uffff]|[^\s]+|\s+/g) || [text];
+  let line = '', n = 1;
+  for (const tok of tokens) {
+    const test = line + tok;
+    if (mc.measureText(test).width > maxW && line !== '') { n++; line = tok.trimStart(); }
+    else line = test;
+  }
+  return n;
+}
 
+async function saveCard() {
   const btn = document.getElementById('saveBtn');
   btn.disabled = true; btn.textContent = '저장 중...';
   showToast('💾 저장 중...', 30000);
-
-  const card = document.getElementById('card');
-
-  /* 저장 전: 편집 UI 숨기기 */
-  const hideEls = card.querySelectorAll('.hide-on-save');
-  hideEls.forEach(el => { el.dataset.prevDisplay = el.style.display; el.style.display = 'none'; });
-
-  /* contenteditable 잠금 */
-  const ces = card.querySelectorAll('[contenteditable]');
-  ces.forEach(el => el.setAttribute('contenteditable', 'false'));
-
-  document.activeElement?.blur();
-  await new Promise(r => setTimeout(r, 80));
-
-  /* ── 핵심: 카드를 고정 너비 오프스크린 컨테이너에 복제해서 캡처 ── */
-  const CARD_W = 460;
-
-  // textarea/input 값을 div/span으로 미리 교체한 클론 생성
-  const clone = card.cloneNode(true);
-
-  // hide-on-save 제거
-  clone.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
-
-  // textarea.t-text → div
-  clone.querySelectorAll('textarea.t-text').forEach(ta => {
-    const orig = card.querySelector(`#${ta.closest('.tweet')?.id} .t-text`);
-    const val = orig ? orig.value : ta.textContent;
-    const div = document.createElement('div');
-    div.textContent = val;
-    div.style.cssText = `font-size:13px;line-height:1.5;color:#0F1419;font-family:inherit;width:100%;word-break:break-word;overflow-wrap:break-word;white-space:pre-wrap;min-height:20px;`;
-    ta.parentNode.replaceChild(div, ta);
-  });
-
-  // textarea.bio-ta → div
-  clone.querySelectorAll('textarea.bio-ta').forEach(ta => {
-    const orig = document.getElementById('bioEl');
-    const val = orig ? orig.value : '';
-    const div = document.createElement('div');
-    div.textContent = val || ta.getAttribute('placeholder') || '';
-    div.style.cssText = `font-size:14px;line-height:1.5;color:${val ? '#0F1419' : '#8B98A5'};font-family:inherit;width:100%;word-break:break-word;white-space:pre-wrap;margin-top:10px;`;
-    ta.parentNode.replaceChild(div, ta);
-  });
-
-  // input → span
-  clone.querySelectorAll('input.t-num, input.fol-num, input.t-time, input.meta-in').forEach(inp => {
-    const span = document.createElement('span');
-    span.textContent = inp.value;
-    const cs = getComputedStyle(inp);
-    span.style.cssText = `font-size:${cs.fontSize};color:${cs.color};font-family:${cs.fontFamily};font-weight:${cs.fontWeight};white-space:nowrap;`;
-    inp.parentNode.replaceChild(span, inp);
-  });
-
-  // 오프스크린 wrapper에 고정 너비로 삽입
-  const wrapper = document.createElement('div');
-  wrapper.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:${CARD_W}px;background:#fff;`;
-  clone.style.cssText = `width:${CARD_W}px;max-width:${CARD_W}px;border-radius:16px;overflow:hidden;border:1px solid #EFF3F4;background:#fff;`;
-  wrapper.appendChild(clone);
-  document.body.appendChild(wrapper);
-
-  // 레이아웃 반영 대기
-  await new Promise(r => setTimeout(r, 120));
-
   try {
-    const canvas = await html2canvas(clone, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-      imageTimeout: 15000,
-      removeContainer: true,
-      foreignObjectRendering: false,
-      width: CARD_W,
-      windowWidth: CARD_W,
+    const S=2, CW=460, PAD=16, HDR_H=110, AV=74;
+    const BD='#EFF3F4', T1='#0F1419', T2='#536471', T3='#8B98A5';
+    const F = "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+
+    const name   = document.getElementById('nameEl').textContent.trim();
+    const handle = document.getElementById('handleEl').textContent.trim();
+    const bio    = document.getElementById('bioEl').value.trim();
+    const showFollow = document.getElementById('followRow').style.display !== 'none';
+    const fwing  = document.getElementById('followingNum').value;
+    const fwer   = document.getElementById('followerNum').value;
+    const showLoc  = document.getElementById('locationItem').style.display !== 'none';
+    const locVal   = document.getElementById('locEl').value.trim();
+    const showLink = document.getElementById('linkItem').style.display !== 'none';
+    const linkVal  = document.getElementById('linkEl').value.trim();
+    const hdrEl  = document.getElementById('hdrImg');
+    const avEl   = document.getElementById('avImg');
+    const hdrSrc = hdrEl.style.display !== 'none' ? hdrEl.src : '';
+    const avSrc  = avEl.style.display  !== 'none' ? avEl.src  : '';
+    const creditTxt = document.getElementById('hdrCreditText')?.textContent.trim() || '';
+    const creditCol = getComputedStyle(document.getElementById('hdrCredit')).getPropertyValue('--credit-color').trim() || '#fff';
+
+    const tweetEls = [...document.getElementById('tweetsWrap').querySelectorAll('.tweet')];
+    const tds = tweetEls.map(el => {
+      const id = el.id;
+      const imgEl = el.querySelector(`#t-img-${id}`);
+      const imgArea = document.getElementById(`t-img-area-${id}`);
+      return {
+        text:  el.querySelector('.t-text')?.value || '',
+        time:  el.querySelector('.t-time')?.value || '방금',
+        reply: el.querySelector(`#reply-${id}`)?.value || '',
+        rt:    el.querySelector(`#rt-${id}`)?.value || '',
+        like:  el.querySelector(`#like-${id}`)?.value || '',
+        imgSrc: (imgEl && imgArea?.style.display !== 'none') ? imgEl.src : '',
+      };
     });
 
-    document.body.removeChild(wrapper);
+    const [hdrImg, avImg] = await Promise.all([hdrSrc?loadImg(hdrSrc):null, avSrc?loadImg(avSrc):null]);
+    const tImgs = await Promise.all(tds.map(t => t.imgSrc ? loadImg(t.imgSrc) : null));
 
-    /* 흰 여백 추가 */
-    const PAD = 80;
-    const padded = document.createElement('canvas');
-    padded.width = canvas.width + PAD * 2;
-    padded.height = canvas.height + PAD * 2;
-    const pctx = padded.getContext('2d');
-    pctx.fillStyle = '#ffffff';
-    pctx.fillRect(0, 0, padded.width, padded.height);
-    pctx.drawImage(canvas, PAD, PAD);
-    padded.toBlob(blob => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'profile-card.png';
+    const bodyW = CW - PAD*2;
+    const tweetW = CW - PAD - 38 - 10 - PAD;
+
+    // 높이 계산
+    let profH = PAD + AV*0.58 + 12 + 24 + 20;
+    if (bio) profH += 12 + countLines(bio, `400 14px ${F}`, bodyW) * 21;
+    if (showFollow) profH += 12 + 20;
+    if (showLoc||showLink) profH += 10 + 18;
+    profH += PAD;
+
+    let twH = 0;
+    tds.forEach((t, i) => {
+      let h = 12 + 16 + 6;
+      h += t.text ? countLines(t.text, `400 13px ${F}`, tweetW)*20 : 14;
+      if (t.imgSrc && tImgs[i]) {
+        const r = tImgs[i].naturalHeight / tImgs[i].naturalWidth;
+        h += 8 + Math.min(220, Math.round(tweetW*r)) + 6;
+      }
+      h += 10 + 20 + 12;
+      twH += h;
+    });
+    const TOTAL = HDR_H + profH + (tds.length ? 1 + twH : 0);
+    const OPAD = 40;
+
+    const canvas = document.createElement('canvas');
+    canvas.width  = (CW + OPAD*2)*S;
+    canvas.height = (TOTAL + OPAD*2)*S;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(S,S);
+
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,CW+OPAD*2,TOTAL+OPAD*2);
+
+    const ox=OPAD, oy=OPAD;
+    ctx.save(); rrect(ctx,ox,oy,CW,TOTAL,16); ctx.clip();
+
+    // 헤더
+    if (hdrImg) ctx.drawImage(hdrImg, ox, oy, CW, HDR_H);
+    else { ctx.fillStyle='#CFD9DE'; ctx.fillRect(ox,oy,CW,HDR_H); }
+
+    if (creditTxt) {
+      ctx.font=`500 9px ${F}`; ctx.fillStyle=creditCol;
+      ctx.textAlign='center'; ctx.textBaseline='top';
+      ctx.fillText(creditTxt, ox+CW/2, oy+3);
+      ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    }
+
+    // 아바타
+    const avX=ox+PAD, avY=oy+HDR_H-AV*0.42;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(avX+AV/2,avY+AV/2,AV/2+4,0,Math.PI*2);
+    ctx.fillStyle='#fff'; ctx.fill();
+    ctx.beginPath(); ctx.arc(avX+AV/2,avY+AV/2,AV/2,0,Math.PI*2); ctx.clip();
+    if (avImg) ctx.drawImage(avImg,avX,avY,AV,AV);
+    else { ctx.fillStyle='#CFD9DE'; ctx.fillRect(avX,avY,AV,AV); }
+    ctx.restore();
+
+    // 팔로우 버튼
+    const fbW=72,fbH=28,fbX=ox+CW-PAD-fbW,fbY=oy+HDR_H+8;
+    rrect(ctx,fbX,fbY,fbW,fbH,14); ctx.fillStyle=T1; ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font=`700 13px ${F}`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('팔로우',fbX+fbW/2,fbY+fbH/2);
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+
+    let y = oy + HDR_H + AV*0.58 + 14;
+
+    // 이름
+    ctx.font=`800 19px ${F}`; ctx.fillStyle=name?T1:T3;
+    ctx.fillText(name||'이름 / 닉네임', ox+PAD, y); y+=24;
+    // 핸들
+    ctx.font=`400 14px ${F}`; ctx.fillStyle=handle?T2:T3;
+    ctx.fillText(handle||'@ID', ox+PAD, y); y+=20;
+    // bio
+    if (bio) { y+=10; const ln=drawWrapped(ctx,bio,ox+PAD,y,bodyW,21,T1,`400 14px ${F}`); y+=ln*21; }
+    // 팔로잉/팔로워
+    if (showFollow) {
+      y+=12;
+      ctx.font=`700 13px ${F}`; ctx.fillStyle=T1; ctx.fillText(fwing||'0',ox+PAD,y);
+      const w1=ctx.measureText(fwing||'0').width;
+      ctx.font=`400 13px ${F}`; ctx.fillStyle=T2; ctx.fillText(' 팔로잉',ox+PAD+w1,y);
+      const w2=w1+ctx.measureText(' 팔로잉').width+14;
+      ctx.font=`700 13px ${F}`; ctx.fillStyle=T1; ctx.fillText(fwer||'0',ox+PAD+w2,y);
+      const w3=ctx.measureText(fwer||'0').width;
+      ctx.font=`400 13px ${F}`; ctx.fillStyle=T2; ctx.fillText(' 팔로워',ox+PAD+w2+w3,y);
+      y+=8;
+    }
+    // 메타
+    if (showLoc||showLink) {
+      y+=10; ctx.font=`400 13px ${F}`; ctx.fillStyle=T2; let mx2=ox+PAD;
+      if (showLoc&&locVal) { ctx.fillText('📍 '+locVal,mx2,y); mx2+=ctx.measureText('📍 '+locVal).width+14; }
+      if (showLink&&linkVal) ctx.fillText('🔗 '+linkVal,mx2,y);
+      y+=8;
+    }
+    y+=PAD;
+
+    // 구분선
+    if (tds.length) {
+      ctx.strokeStyle=BD; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(ox,y); ctx.lineTo(ox+CW,y); ctx.stroke();
+      y+=1;
+    }
+
+    // 트윗
+    for (let ti=0; ti<tds.length; ti++) {
+      const t=tds[ti], tImg=tImgs[ti];
+      y+=12;
+      const tx=ox+PAD;
+      // 아바타
+      ctx.save(); ctx.beginPath(); ctx.arc(tx+19,y+19,19,0,Math.PI*2); ctx.clip();
+      if (avImg) ctx.drawImage(avImg,tx,y,38,38);
+      else { ctx.fillStyle='#CFD9DE'; ctx.fillRect(tx,y,38,38); }
+      ctx.restore();
+
+      const trx=tx+48, tw=CW-PAD-48-PAD;
+      let hx=trx, hy=y+14;
+      ctx.font=`700 13px ${F}`; ctx.fillStyle=T1; ctx.fillText(name||'이름',hx,hy); hx+=ctx.measureText(name||'이름').width+4;
+      ctx.font=`400 12px ${F}`; ctx.fillStyle=T2; ctx.fillText(handle||'@ID',hx,hy); hx+=ctx.measureText(handle||'@ID').width+4;
+      ctx.fillStyle=T3; ctx.font=`400 11px ${F}`; ctx.fillText('·',hx,hy); hx+=ctx.measureText('·').width+4;
+      ctx.font=`400 12px ${F}`; ctx.fillStyle=T2; ctx.fillText(t.time,hx,hy);
+
+      let ty=hy+8;
+      if (t.text) { const ln=drawWrapped(ctx,t.text,trx,ty,tw,20,T1,`400 13px ${F}`); ty+=ln*20; } else ty+=14;
+      if (t.imgSrc && tImg) {
+        ty+=8;
+        const ratio=tImg.naturalHeight/tImg.naturalWidth;
+        const iw=tw, ih=Math.min(220,Math.round(iw*ratio));
+        ctx.save(); rrect(ctx,trx,ty,iw,ih,10); ctx.clip();
+        ctx.drawImage(tImg,trx,ty,iw,ih); ctx.restore();
+        ty+=ih+6;
+      }
+      ty+=10;
+      ctx.font=`400 12px ${F}`; ctx.fillStyle=T2;
+      const acts=[['💬',t.reply],['🔁',t.rt],['♡',t.like]];
+      const sp=tw*0.55/3;
+      acts.forEach(([ic,v],i)=>{ ctx.fillText(ic+(v?' '+v:''),trx+i*sp,ty); });
+      ctx.fillText('🔖',trx+tw-34,ty); ctx.fillText('↑',trx+tw-12,ty);
+      y=ty+12;
+      if (ti<tds.length-1) { ctx.strokeStyle=BD; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(ox,y); ctx.lineTo(ox+CW,y); ctx.stroke(); }
+    }
+
+    ctx.restore();
+    rrect(ctx,ox+.5,oy+.5,CW-1,TOTAL-1,16);
+    ctx.strokeStyle=BD; ctx.lineWidth=1; ctx.stroke();
+
+    canvas.toBlob(blob=>{
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob); a.download='profile-card.png';
       document.body.appendChild(a); a.click();
-      setTimeout(() => { URL.revokeObjectURL(a.href); document.body.removeChild(a); }, 200);
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); document.body.removeChild(a); },200);
       showToast('✅ 저장 완료!');
-    }, 'image/png');
+    },'image/png');
 
-  } catch (err) {
-    document.body.removeChild(wrapper);
-    console.error('Save failed:', err);
-    showToast('⚠️ 저장 실패: ' + err.message, 5000);
+  } catch(err) {
+    console.error(err);
+    showToast('⚠️ 저장 실패: '+err.message,5000);
   }
-
-  /* 복원 */
-  hideEls.forEach(el => { el.style.display = el.dataset.prevDisplay || ''; });
-  ces.forEach(el => el.setAttribute('contenteditable', 'true'));
-  btn.disabled = false; btn.textContent = 'PNG 저장';
+  btn.disabled=false; btn.textContent='PNG 저장';
 }
 </script>
-</body>
-</html>
