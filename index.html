@@ -79,25 +79,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .tweet:last-child{border-bottom:none;}
 .t-av{width:38px;height:38px;border-radius:50%;background:#CFD9DE;flex-shrink:0;overflow:hidden;}
 .t-av img{width:100%;height:100%;object-fit:cover;display:block;}
-.t-right{flex:1;min-width:0;}
-.t-head{display:flex;align-items:center;gap:5px;margin-bottom:4px;flex-wrap:wrap;}
-.t-name{font-size:13px;font-weight:700;color:var(--t1);}
-.t-handle{font-size:12px;color:var(--t2);}
-.t-dot{font-size:11px;color:var(--t3);}
-.t-time{font-size:12px;color:var(--t2);border:none;background:transparent;font-family:inherit;outline:none;width:44px;}
+.t-right{flex:1;min-width:0;overflow:hidden;}
+.t-head{display:flex;align-items:center;gap:4px;margin-bottom:4px;flex-wrap:nowrap;overflow:hidden;}
+.t-name{font-size:13px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;max-width:35%;}
+.t-handle{font-size:12px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1;min-width:0;}
+.t-dot{font-size:11px;color:var(--t3);flex-shrink:0;}
+.t-time{font-size:12px;color:var(--t2);border:none;background:transparent;font-family:inherit;outline:none;flex-shrink:0;min-width:20px;max-width:80px;width:auto;}
 .t-time:focus{background:#F7F9F9;border-radius:3px;}
-.del-btn{margin-left:auto;cursor:pointer;color:var(--t3);font-size:16px;border:none;background:none;padding:0 2px;}
-.t-text{font-size:14px;line-height:1.5;color:var(--t1);width:100%;border:none;background:transparent;resize:none;font-family:inherit;min-height:20px;display:block;}
+.del-btn{margin-left:auto;cursor:pointer;color:var(--t3);font-size:16px;border:none;background:none;padding:0 2px;flex-shrink:0;}
+.t-text{font-size:14px;line-height:1.5;color:var(--t1);width:100%;border:none;background:transparent;resize:none;font-family:inherit;min-height:20px;display:block;word-break:break-word;overflow-wrap:break-word;white-space:pre-wrap;}
 .t-text:focus{outline:none;background:#F7F9F9;border-radius:4px;}
 .t-text::placeholder{color:var(--t3);}
-.t-actions{display:flex;gap:18px;margin-top:8px;}
-.t-act{display:flex;align-items:center;gap:4px;color:var(--t2);font-size:12px;}
-.t-act svg{width:14px;height:14px;}
-.t-num{border:none;background:transparent;font-family:inherit;font-size:12px;color:var(--t2);width:34px;outline:none;}
-.t-num:focus{background:#F7F9F9;border-radius:3px;}
+.t-actions{display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;}
+.t-act{display:flex;align-items:center;gap:4px;color:var(--t2);font-size:12px;flex-shrink:0;}
+.t-act svg{width:14px;height:14px;flex-shrink:0;}
+.t-num{border:none;background:transparent;font-family:inherit;font-size:12px;color:var(--t2);min-width:16px;max-width:60px;width:auto;outline:none;}
 
 .add-tweet-btn{display:flex;align-items:center;justify-content:center;gap:5px;margin:0 16px 12px;padding:9px;background:transparent;border:1.5px dashed #D1D9E0;border-radius:11px;cursor:pointer;font-family:inherit;font-size:12px;color:var(--t2);transition:all .15s;width:calc(100% - 32px);}
 .add-tweet-btn:hover{border-color:var(--blue);color:var(--blue);}
+.t-img-area{margin-top:8px;margin-bottom:2px;position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--bd);max-height:220px;}
+.t-img-area img{width:100%;display:block;object-fit:cover;max-height:220px;}
+.t-img-del{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;line-height:1;}
+.t-img-del:hover{background:rgba(0,0,0,.85);}
+.t-img-add{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:none;cursor:pointer;color:var(--t2);padding:0;margin-left:auto;transition:color .15s;}
+.t-img-add:hover{color:var(--blue);}
+.t-img-add svg{width:15px;height:15px;}
 
 /* PANEL */
 .edit-panel{width:350px;flex-shrink:0;}
@@ -313,6 +319,7 @@ textarea.pinput{resize:none;}
 </div>
 
 <input type="file" id="fileIn" accept="image/*" style="display:none" onchange="onFile(event)">
+<input type="file" id="tweetFileIn" accept="image/*" style="display:none" onchange="onTweetFile(event)">
 
 <div class="modal-wrap" id="cropModal">
   <div class="modal">
@@ -399,7 +406,16 @@ function updateTime(id, val) {
   if (!tweets[id]) return;
   tweets[id].time = val;
   const el = document.querySelector('#' + id + ' .t-time');
-  if (el) el.value = val || '방금';
+  if (el) { el.value = val || '방금'; autoSizeInput(el); }
+}
+function autoSizeInput(inp) {
+  // 내용 길이에 맞게 input 너비 자동 조절
+  const tmp = document.createElement('span');
+  tmp.style.cssText = 'visibility:hidden;position:absolute;white-space:pre;font-size:12px;font-family:inherit;';
+  tmp.textContent = inp.value || inp.placeholder || '';
+  document.body.appendChild(tmp);
+  inp.style.width = Math.max(20, tmp.offsetWidth + 4) + 'px';
+  document.body.removeChild(tmp);
 }
 function syncStatPanel(id, stat, val) {
   if (tweets[id]) tweets[id][stat] = val;
@@ -416,7 +432,7 @@ function getAvSrc() {
 function addTweet() {
   tweetCnt++;
   const id = 'tw' + tweetCnt;
-  tweets[id] = { reply: '', rt: '', like: '', time: '방금' };
+  tweets[id] = { reply: '', rt: '', like: '', time: '방금', imgSrc: '' };
   const name = document.getElementById('nameEl').textContent || '이름';
   const handle = document.getElementById('handleEl').textContent || '@ID';
   const src = getAvSrc();
@@ -430,27 +446,34 @@ function addTweet() {
         <span class="t-handle">${handle}</span>
         <span class="t-dot">·</span>
         <input class="t-time" value="방금" spellcheck="false"
-          oninput="if(tweets['${id}'])tweets['${id}'].time=this.value;const p=document.getElementById('ps-time-${id}');if(p)p.value=this.value;">
+          oninput="autoSizeInput(this);if(tweets['${id}'])tweets['${id}'].time=this.value;const p=document.getElementById('ps-time-${id}');if(p)p.value=this.value;">
         <button class="del-btn hide-on-save" onclick="removeTweet('${id}')">×</button>
       </div>
       <textarea class="t-text" placeholder="트윗 내용을 입력하세요..." rows="1" spellcheck="false"
         oninput="ar(this)"></textarea>
+      <div class="t-img-area" id="t-img-area-${id}" style="display:none">
+        <img id="t-img-${id}" src="" alt="">
+        <button class="t-img-del hide-on-save" onclick="removeTweetImg('${id}')">×</button>
+      </div>
       <div class="t-actions">
         <div class="t-act">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           <input class="t-num" id="reply-${id}" placeholder="0" spellcheck="false"
-            oninput="syncStatPanel('${id}','reply',this.value)">
+            oninput="autoSizeInput(this);syncStatPanel('${id}','reply',this.value)">
         </div>
         <div class="t-act">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
           <input class="t-num" id="rt-${id}" placeholder="0" spellcheck="false"
-            oninput="syncStatPanel('${id}','rt',this.value)">
+            oninput="autoSizeInput(this);syncStatPanel('${id}','rt',this.value)">
         </div>
         <div class="t-act">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
           <input class="t-num" id="like-${id}" placeholder="0" spellcheck="false"
-            oninput="syncStatPanel('${id}','like',this.value)">
+            oninput="autoSizeInput(this);syncStatPanel('${id}','like',this.value)">
         </div>
+        <button class="t-img-add hide-on-save" id="t-img-add-${id}" onclick="triggerTweetImg('${id}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </button>
       </div>
     </div>`;
   document.getElementById('tweetsWrap').appendChild(d);
@@ -461,6 +484,36 @@ function addTweet() {
 function removeTweet(id) {
   const el = document.getElementById(id); if (el) el.remove();
   delete tweets[id]; renderTweetPanel();
+}
+
+let curTweetId = null;
+function triggerTweetImg(id) {
+  curTweetId = id;
+  document.getElementById('tweetFileIn').value = '';
+  document.getElementById('tweetFileIn').click();
+}
+function onTweetFile(e) {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => openTweetCrop(ev.target.result);
+  r.readAsDataURL(f);
+}
+function openTweetCrop(src) {
+  document.getElementById('cropTitle').textContent = '트윗 사진 자르기';
+  const img = document.getElementById('cropImg'); img.src = src;
+  // store mode so applyCrop knows what to do
+  uploadType = 'tweet';
+  document.getElementById('cropModal').classList.add('open');
+  setTimeout(() => {
+    if (cropper) cropper.destroy();
+    cropper = new Cropper(img, { aspectRatio: NaN, viewMode: 1, autoCropArea: 1, free: true });
+  }, 100);
+}
+function removeTweetImg(id) {
+  document.getElementById('t-img-area-' + id).style.display = 'none';
+  document.getElementById('t-img-' + id).src = '';
+  document.getElementById('t-img-add-' + id).style.display = '';
+  if (tweets[id]) tweets[id].imgSrc = '';
 }
 
 function syncTweetAvatars(src) {
@@ -498,13 +551,21 @@ function closeModal() {
 }
 function applyCrop() {
   if (!cropper) return;
-  const raw = cropper.getCroppedCanvas({ maxWidth: 1400, maxHeight: 800 });
+  const raw = cropper.getCroppedCanvas({ maxWidth: 1400, maxHeight: 1400 });
   const flat = document.createElement('canvas'); flat.width = raw.width; flat.height = raw.height;
   const ctx = flat.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, flat.width, flat.height); ctx.drawImage(raw, 0, 0);
   const url = flat.toDataURL('image/png');
   if (uploadType === 'header') {
     const i = document.getElementById('hdrImg'); i.src = url; i.style.display = 'block';
     document.getElementById('hdrZone').style.background = '#fff';
+  } else if (uploadType === 'tweet') {
+    const id = curTweetId;
+    if (id) {
+      document.getElementById('t-img-' + id).src = url;
+      document.getElementById('t-img-area-' + id).style.display = 'block';
+      document.getElementById('t-img-add-' + id).style.display = 'none';
+      if (tweets[id]) tweets[id].imgSrc = url;
+    }
   } else {
     const i = document.getElementById('avImg'); i.src = url; i.style.display = 'block';
     document.getElementById('avZone').style.background = '#fff';
