@@ -616,7 +616,7 @@ function applyCrop() {
   closeModal();
 }
 
-/* ── 저장: html2canvas (헤더 고정 너비 보장) ── */
+/* ── 저장: html2canvas ── */
 async function saveCard() {
   const btn = document.getElementById('saveBtn');
   btn.disabled = true; btn.textContent = '저장 중...';
@@ -632,9 +632,10 @@ async function saveCard() {
   document.activeElement?.blur();
   await new Promise(r => setTimeout(r, 80));
 
-  try {
-    const CARD_W = 460;
+  // 카드 실제 너비 측정 (렌더링 완료 후)
+  const cardW = card.getBoundingClientRect().width;
 
+  try {
     const canvas = await html2canvas(card, {
       scale: 2,
       useCORS: true,
@@ -644,31 +645,20 @@ async function saveCard() {
       imageTimeout: 15000,
       removeContainer: true,
       foreignObjectRendering: false,
+      width: cardW,
+      windowWidth: cardW,
       onclone: (doc) => {
         // hide-on-save 숨기기
         doc.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
 
-        // 카드 너비 강제 460px → 헤더 찌부 방지
+        // 클론 카드도 동일 너비로 맞추기 (헤더 찌부 방지)
         const c = doc.getElementById('card');
         if (c) {
-          c.style.width = CARD_W + 'px';
-          c.style.maxWidth = CARD_W + 'px';
-          c.style.minWidth = CARD_W + 'px';
-          // 헤더도 강제
-          const hdr = c.querySelector('.card-hdr');
-          if (hdr) {
-            hdr.style.width = CARD_W + 'px';
-            hdr.style.height = '110px';
-            const hdrImg = hdr.querySelector('img');
-            if (hdrImg) {
-              hdrImg.style.width = CARD_W + 'px';
-              hdrImg.style.height = '110px';
-              hdrImg.style.objectFit = 'cover';
-            }
-          }
+          c.style.width = cardW + 'px';
+          c.style.maxWidth = cardW + 'px';
         }
 
-        // textarea → div 교체 (html2canvas textarea 잘림 버그)
+        // textarea → div 교체
         doc.querySelectorAll('textarea.t-text').forEach(ta => {
           const div = doc.createElement('div');
           div.textContent = ta.value;
