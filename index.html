@@ -633,20 +633,28 @@ async function saveCard() {
   ces.forEach(el => el.setAttribute('contenteditable', 'false'));
   document.activeElement?.blur();
 
-  // PC는 380px 고정, 모바일은 실제 렌더링 너비 사용
+  // 카드를 고정 컨테이너에 임시 이동 후 캡처 (찌부 방지)
   const isMobile = window.innerWidth <= 768;
-  const prevWidth = card.style.width;
-  const prevMaxWidth = card.style.maxWidth;
-  const prevMinWidth = card.style.minWidth;
-
   const targetW = isMobile ? Math.round(card.getBoundingClientRect().width) : 380;
+
+  // 고정 크기 컨테이너 생성
+  const container = document.createElement('div');
+  container.style.cssText = `position:fixed;top:0;left:0;width:${targetW}px;overflow:hidden;z-index:-9999;opacity:0;pointer-events:none;`;
+  document.body.appendChild(container);
+
+  // 카드 플레이스홀더
+  const placeholder = document.createElement('div');
+  card.parentNode.insertBefore(placeholder, card);
+  container.appendChild(card);
+
+  // 카드 너비 강제
+  const prevStyle = card.getAttribute('style') || '';
   card.style.width = targetW + 'px';
   card.style.maxWidth = targetW + 'px';
   card.style.minWidth = targetW + 'px';
+  card.style.borderRadius = '16px';
 
-  // 레이아웃 반영 대기
   await new Promise(r => setTimeout(r, 200));
-  // reflow 후 실제 너비 재측정
   const actualW = Math.round(card.getBoundingClientRect().width);
 
   try {
@@ -659,8 +667,6 @@ async function saveCard() {
       imageTimeout: 15000,
       removeContainer: true,
       foreignObjectRendering: false,
-      width: actualW,
-      windowWidth: actualW,
       onclone: (doc) => {
         doc.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
         replaceInputs(doc);
@@ -690,10 +696,11 @@ async function saveCard() {
     showToast('⚠️ 저장 실패: ' + err.message, 5000);
   }
 
-  // 복원
-  card.style.width = prevWidth;
-  card.style.maxWidth = prevMaxWidth;
-  card.style.minWidth = prevMinWidth;
+  // 카드 원위치 복원
+  card.setAttribute('style', prevStyle);
+  placeholder.parentNode.insertBefore(card, placeholder);
+  placeholder.remove();
+  document.body.removeChild(container);
   hideEls.forEach(el => { el.style.display = el.dataset.prev || ''; });
   ces.forEach(el => el.setAttribute('contenteditable', 'true'));
   btn.disabled = false; btn.textContent = 'PNG 저장';
