@@ -646,10 +646,10 @@ async function saveCard() {
 
   // 레이아웃 반영 대기
   await new Promise(r => setTimeout(r, 200));
-  card.getBoundingClientRect();
+  // reflow 후 실제 너비 재측정
+  const actualW = Math.round(card.getBoundingClientRect().width);
 
   try {
-    const captureW = Math.round(card.getBoundingClientRect().width);
     const canvas = await html2canvas(card, {
       scale: 3,
       useCORS: true,
@@ -659,8 +659,8 @@ async function saveCard() {
       imageTimeout: 15000,
       removeContainer: true,
       foreignObjectRendering: false,
-      width: captureW,
-      windowWidth: captureW,
+      width: actualW,
+      windowWidth: actualW,
       onclone: (doc) => {
         doc.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
         replaceInputs(doc);
