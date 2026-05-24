@@ -586,7 +586,7 @@ function openCrop(src) {
   document.getElementById('cropModal').classList.add('open');
   setTimeout(() => {
     if (cropper) cropper.destroy();
-    cropper = new Cropper(img, { aspectRatio: uploadType === 'header' ? 3 : 1, viewMode: 1, autoCropArea: 1 });
+    cropper = new Cropper(img, { aspectRatio: uploadType === 'header' ? 460/110 : 1, viewMode: 1, autoCropArea: 1 });
   }, 100);
 }
 function closeModal() {
@@ -668,6 +668,17 @@ async function saveCard() {
         doc.body.style.width = CARD_W + 'px';
         const c = doc.getElementById('card');
         if (c) { c.style.width = CARD_W + 'px'; c.style.maxWidth = CARD_W + 'px'; c.style.minWidth = CARD_W + 'px'; }
+        // html2canvas는 object-fit:cover를 지원 안 함 → 헤더 이미지 직접 보정
+        const hdrImg = doc.getElementById('hdrImg');
+        if (hdrImg && hdrImg.style.display !== 'none') {
+          const zW = CARD_W, zH = 110;
+          const natW = hdrImg.naturalWidth || zW;
+          const natH = hdrImg.naturalHeight || zH;
+          const scale = Math.max(zW / natW, zH / natH);
+          const dW = natW * scale, dH = natH * scale;
+          const ox = (zW - dW) / 2, oy = (zH - dH) / 2;
+          hdrImg.style.cssText = `position:absolute;width:${dW}px;height:${dH}px;left:${ox}px;top:${oy}px;`;
+        }
         // textarea → div
         doc.querySelectorAll('textarea.t-text').forEach(ta => {
           const div = doc.createElement('div');
