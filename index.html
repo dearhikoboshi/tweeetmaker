@@ -652,7 +652,7 @@ async function saveCard() {
   try {
     const captureW = Math.round(card.getBoundingClientRect().width);
     const canvas = await html2canvas(card, {
-      scale: 2,
+      scale: 3,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
