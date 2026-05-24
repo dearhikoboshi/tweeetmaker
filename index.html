@@ -29,8 +29,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .card{background:#fff;border:1px solid var(--bd);border-radius:16px;overflow:hidden;max-width:460px;width:100%;}
 
 /* 헤더 */
-.card-hdr{position:relative;width:100%;height:110px;background:#CFD9DE;background-size:cover;background-position:center;overflow:hidden;cursor:pointer;}
-.card-hdr img{display:none !important;}
+.card-hdr{position:relative;width:100%;height:110px;background:#CFD9DE;overflow:hidden;cursor:pointer;}
+.card-hdr img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;object-position:center;display:block;}
 .hdr-overlay{position:absolute;inset:0;background:rgba(0,0,0,0);display:flex;align-items:center;justify-content:center;transition:background .2s;}
 .card-hdr:hover .hdr-overlay{background:rgba(0,0,0,.3);}
 .hdr-hint{opacity:0;color:#fff;font-size:12px;font-weight:600;transition:opacity .2s;display:flex;flex-direction:column;align-items:center;gap:5px;}
@@ -600,11 +600,8 @@ function applyCrop() {
   const ctx = flat.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, flat.width, flat.height); ctx.drawImage(raw, 0, 0);
   const url = flat.toDataURL('image/png');
   if (uploadType === 'header') {
-    const zone = document.getElementById('hdrZone');
-    zone.style.backgroundImage = `url(${url})`;
-    zone.style.backgroundSize = 'cover';
-    zone.style.backgroundPosition = 'center';
-    zone.style.background = `url(${url}) center/cover no-repeat`;
+    const i = document.getElementById('hdrImg'); i.src = url; i.style.display = 'block';
+    document.getElementById('hdrZone').style.backgroundColor = 'transparent';
   } else if (uploadType === 'tweet') {
     const id = curTweetId;
     if (id) {
@@ -671,6 +668,16 @@ async function saveCard() {
         doc.body.style.width = CARD_W + 'px';
         const c = doc.getElementById('card');
         if (c) { c.style.width = CARD_W + 'px'; c.style.maxWidth = CARD_W + 'px'; c.style.minWidth = CARD_W + 'px'; }
+        // html2canvas는 object-fit:cover 미지원 → 헤더 이미지를 정확한 크기로 직접 배치
+        const hdrImg = doc.getElementById('hdrImg');
+        if (hdrImg && hdrImg.src && !hdrImg.src.endsWith('#')) {
+          const cW = CARD_W, cH = 110;
+          const nW = hdrImg.naturalWidth || cW, nH = hdrImg.naturalHeight || cH;
+          const scale = Math.max(cW / nW, cH / nH);
+          const dW = Math.round(nW * scale), dH = Math.round(nH * scale);
+          const dx = Math.round((cW - dW) / 2), dy = Math.round((cH - dH) / 2);
+          hdrImg.style.cssText = `position:absolute;width:${dW}px;height:${dH}px;top:${dy}px;left:${dx}px;object-fit:unset;display:block;`;
+        }
         // textarea → div
         doc.querySelectorAll('textarea.t-text').forEach(ta => {
           const div = doc.createElement('div');
