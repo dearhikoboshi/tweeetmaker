@@ -651,6 +651,28 @@ async function saveCard() {
 
   await new Promise(r => setTimeout(r, 200));
 
+  // 헤더 이미지: html2canvas가 object-fit:cover를 지원하지 않으므로
+  // 캡처 전에 직접 캔버스로 정확히 그려서 교체
+  const hdrImg = document.getElementById('hdrImg');
+  const hdrZone = document.getElementById('hdrZone');
+  let hdrPreCanvas = null;
+  if (hdrImg && hdrImg.style.display !== 'none' && hdrImg.naturalWidth > 0) {
+    const SCALE = 3;
+    const cW = CARD_W, cH = 110;
+    const nW = hdrImg.naturalWidth, nH = hdrImg.naturalHeight;
+    const s = Math.max(cW / nW, cH / nH);
+    const dW = nW * s, dH = nH * s;
+    const dx = (cW - dW) / 2, dy = (cH - dH) / 2;
+    hdrPreCanvas = document.createElement('canvas');
+    hdrPreCanvas.width = cW * SCALE;
+    hdrPreCanvas.height = cH * SCALE;
+    hdrPreCanvas.style.cssText = `position:absolute;top:0;left:0;width:${cW}px;height:${cH}px;display:block;`;
+    const ctx = hdrPreCanvas.getContext('2d');
+    ctx.drawImage(hdrImg, dx * SCALE, dy * SCALE, dW * SCALE, dH * SCALE);
+    hdrImg.style.display = 'none';
+    hdrZone.appendChild(hdrPreCanvas);
+  }
+
   try {
     const canvas = await html2canvas(card, {
       scale: 3,
@@ -668,16 +690,6 @@ async function saveCard() {
         doc.body.style.width = CARD_W + 'px';
         const c = doc.getElementById('card');
         if (c) { c.style.width = CARD_W + 'px'; c.style.maxWidth = CARD_W + 'px'; c.style.minWidth = CARD_W + 'px'; }
-        // html2canvas는 object-fit:cover 미지원 → 헤더 이미지를 정확한 크기로 직접 배치
-        const hdrImg = doc.getElementById('hdrImg');
-        if (hdrImg && hdrImg.src && !hdrImg.src.endsWith('#')) {
-          const cW = CARD_W, cH = 110;
-          const nW = hdrImg.naturalWidth || cW, nH = hdrImg.naturalHeight || cH;
-          const scale = Math.max(cW / nW, cH / nH);
-          const dW = Math.round(nW * scale), dH = Math.round(nH * scale);
-          const dx = Math.round((cW - dW) / 2), dy = Math.round((cH - dH) / 2);
-          hdrImg.style.cssText = `position:absolute;width:${dW}px;height:${dH}px;top:${dy}px;left:${dx}px;object-fit:unset;display:block;`;
-        }
         // textarea → div
         doc.querySelectorAll('textarea.t-text').forEach(ta => {
           const div = doc.createElement('div');
@@ -727,6 +739,7 @@ async function saveCard() {
   }
 
   // 복원
+  if (hdrPreCanvas) { hdrPreCanvas.remove(); hdrImg.style.display = 'block'; }
   document.body.style.width = prevBodyW;
   document.body.style.overflow = prevBodyOverflow;
   card.style.width = prevCardW;
