@@ -618,7 +618,7 @@ function applyCrop() {
   closeModal();
 }
 
-/* ── 저장: iframe 기반 캡처 (찌부 완전 해결) ── */
+/* ── 저장: html2canvas ── */
 async function saveCard() {
   const btn = document.getElementById('saveBtn');
   btn.disabled = true; btn.textContent = '저장 중...';
@@ -628,136 +628,70 @@ async function saveCard() {
   const isMobile = window.innerWidth <= 768;
   const CARD_W = isMobile ? Math.round(card.getBoundingClientRect().width) : 380;
 
+  // UI 숨기기
+  const hideEls = card.querySelectorAll('.hide-on-save');
+  hideEls.forEach(el => { el.dataset.prev = el.style.display; el.style.display = 'none'; });
+  const ces = card.querySelectorAll('[contenteditable]');
+  ces.forEach(el => el.setAttribute('contenteditable', 'false'));
+  document.activeElement?.blur();
+
+  // body 너비를 카드 너비로 강제 → html2canvas가 이 기준으로 렌더링
+  const prevBodyW = document.body.style.width;
+  const prevBodyOverflow = document.body.style.overflow;
+  document.body.style.width = CARD_W + 'px';
+  document.body.style.overflow = 'hidden';
+
+  // 카드 너비도 고정
+  const prevCardW = card.style.width;
+  const prevCardMax = card.style.maxWidth;
+  const prevCardMin = card.style.minWidth;
+  card.style.width = CARD_W + 'px';
+  card.style.maxWidth = CARD_W + 'px';
+  card.style.minWidth = CARD_W + 'px';
+
+  await new Promise(r => setTimeout(r, 200));
+
   try {
-    // 카드 현재 상태 수집
-    const name   = document.getElementById('nameEl').textContent;
-    const handle = document.getElementById('handleEl').textContent;
-    const bio    = document.getElementById('bioEl').value;
-    const showFollow = document.getElementById('followRow').style.display !== 'none';
-    const followingNum = document.getElementById('followingNum').value;
-    const followerNum  = document.getElementById('followerNum').value;
-    const showLoc  = document.getElementById('locationItem').style.display !== 'none';
-    const locVal   = document.getElementById('locEl').value;
-    const showLink = document.getElementById('linkItem').style.display !== 'none';
-    const linkVal  = document.getElementById('linkEl').value;
-    const hdrEl  = document.getElementById('hdrImg');
-    const avEl   = document.getElementById('avImg');
-    const hdrSrc = hdrEl.style.display !== 'none' ? hdrEl.src : '';
-    const avSrc  = avEl.style.display  !== 'none' ? avEl.src  : '';
-    const creditTxt = document.getElementById('hdrCreditText')?.textContent || '';
-    const creditStyle = document.getElementById('hdrCredit')?.style.cssText || '';
-
-    // 트윗 데이터
-    const tweetEls = [...document.getElementById('tweetsWrap').querySelectorAll('.tweet')];
-    const tds = tweetEls.map(el => {
-      const id = el.id;
-      const imgEl   = el.querySelector(`#t-img-${id}`);
-      const imgArea = document.getElementById(`t-img-area-${id}`);
-      return {
-        name:    el.querySelector('.t-name')?.textContent || '',
-        handle:  el.querySelector('.t-handle')?.textContent || '',
-        time:    el.querySelector('.t-time')?.value || '방금',
-        text:    el.querySelector('.t-text')?.value || '',
-        reply:   el.querySelector(`#reply-${id}`)?.value || '',
-        rt:      el.querySelector(`#rt-${id}`)?.value || '',
-        like:    el.querySelector(`#like-${id}`)?.value || '',
-        imgSrc:  (imgEl && imgArea?.style.display !== 'none') ? imgEl.src : '',
-      };
-    });
-
-    // CSS 수집
-    const css = document.querySelector('style').textContent;
-
-    // iframe 생성
-    const iframe = document.createElement('iframe');
-    iframe.style.cssText = `position:fixed;top:0;left:0;width:${CARD_W}px;height:2000px;border:none;z-index:-9999;opacity:0;pointer-events:none;`;
-    document.body.appendChild(iframe);
-
-    const idoc = iframe.contentDocument;
-    idoc.open();
-    idoc.write(`<!DOCTYPE html><html><head>
-      <meta charset="UTF-8">
-      <style>
-        *{box-sizing:border-box;margin:0;padding:0;}
-        body{width:${CARD_W}px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
-        ${css}
-        .card{width:${CARD_W}px;max-width:${CARD_W}px;min-width:${CARD_W}px;border-radius:16px;overflow:hidden;border:1px solid #EFF3F4;}
-        .card-hdr{width:100%;height:110px;overflow:hidden;}
-        .card-hdr img{width:100%;height:110px;object-fit:cover;display:block;}
-      </style>
-    </head><body>
-      <div class="card" id="card">
-        <div class="card-hdr">
-          ${hdrSrc ? `<img src="${hdrSrc}" alt="">` : '<div style="width:100%;height:110px;background:#CFD9DE;"></div>'}
-          ${creditTxt ? `<div class="hdr-credit" style="${creditStyle}"><span id="hdrCreditText">${creditTxt}</span></div>` : ''}
-        </div>
-        <div class="card-body">
-          <div class="av-row">
-            <div class="avatar" style="cursor:default;">
-              ${avSrc ? `<img src="${avSrc}" alt="">` : ''}
-            </div>
-            <button class="fol-btn">팔로우</button>
-          </div>
-          <div class="disp-name">${name || ''}</div>
-          <div class="handle">${handle || ''}</div>
-          ${bio ? `<div class="bio-ta" style="font-size:14px;line-height:1.5;color:#0F1419;width:100%;word-break:break-word;white-space:pre-wrap;margin-top:10px;">${bio}</div>` : ''}
-          ${showFollow ? `<div class="follow-row"><div class="fol-item"><span style="font-weight:700;font-size:13px;color:#0F1419;">${followingNum}</span><span class="fol-lbl"> 팔로잉</span></div><div class="fol-item"><span style="font-weight:700;font-size:13px;color:#0F1419;">${followerNum}</span><span class="fol-lbl"> 팔로워</span></div></div>` : ''}
-          ${(showLoc || showLink) ? `<div class="meta-row">${showLoc && locVal ? `<div class="meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;opacity:.7;flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>${locVal}</span></div>` : ''}${showLink && linkVal ? `<div class="meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;opacity:.7;flex-shrink:0;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><span>${linkVal}</span></div>` : ''}</div>` : ''}
-        </div>
-        <hr class="tweet-divider">
-        <div id="tweetsWrap">
-          ${tds.map(t => `
-            <div class="tweet">
-              <div class="t-av">${avSrc ? `<img src="${avSrc}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">` : ''}</div>
-              <div class="t-right">
-                <div class="t-head">
-                  <span class="t-name">${t.name}</span>
-                  <span class="t-handle">${t.handle}</span>
-                  <span class="t-dot">·</span>
-                  <span class="t-time">${t.time}</span>
-                </div>
-                ${t.text ? `<div style="font-size:13px;line-height:1.5;color:#0F1419;width:100%;word-break:break-word;white-space:pre-wrap;">${t.text}</div>` : ''}
-                ${t.imgSrc ? `<div class="t-img-area"><img src="${t.imgSrc}" alt="" style="width:100%;display:block;object-fit:cover;max-height:220px;"></div>` : ''}
-                <div class="t-actions">
-                  <div class="t-acts-left">
-                    <div class="t-act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:15px;height:15px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>${t.reply ? `<span style="font-size:12px;color:#536471;">${t.reply}</span>` : ''}</div>
-                    <div class="t-act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:15px;height:15px;"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${t.rt ? `<span style="font-size:12px;color:#536471;">${t.rt}</span>` : ''}</div>
-                    <div class="t-act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:15px;height:15px;"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>${t.like ? `<span style="font-size:12px;color:#536471;">${t.like}</span>` : ''}</div>
-                  </div>
-                  <div class="t-acts-right">
-                    <div class="t-act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:15px;height:15px;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div>
-                    <div class="t-act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:15px;height:15px;"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    </body></html>`);
-    idoc.close();
-
-    await new Promise(r => setTimeout(r, 300));
-
-    const icard = idoc.getElementById('card');
-    const iH = icard.scrollHeight;
-    iframe.style.height = iH + 'px';
-
-    await new Promise(r => setTimeout(r, 100));
-
-    const canvas = await html2canvas(icard, {
+    const canvas = await html2canvas(card, {
       scale: 3,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
       logging: false,
       imageTimeout: 15000,
+      removeContainer: true,
       foreignObjectRendering: false,
       width: CARD_W,
       windowWidth: CARD_W,
+      onclone: (doc) => {
+        doc.querySelectorAll('.hide-on-save').forEach(el => el.style.display = 'none');
+        doc.body.style.width = CARD_W + 'px';
+        const c = doc.getElementById('card');
+        if (c) { c.style.width = CARD_W + 'px'; c.style.maxWidth = CARD_W + 'px'; c.style.minWidth = CARD_W + 'px'; }
+        // textarea → div
+        doc.querySelectorAll('textarea.t-text').forEach(ta => {
+          const div = doc.createElement('div');
+          div.textContent = ta.value;
+          div.style.cssText = 'font-size:13px;line-height:1.5;color:#0F1419;font-family:inherit;width:100%;word-break:break-word;white-space:pre-wrap;min-height:20px;';
+          ta.parentNode.replaceChild(div, ta);
+        });
+        doc.querySelectorAll('textarea.bio-ta').forEach(ta => {
+          const val = ta.value;
+          const div = doc.createElement('div');
+          div.textContent = val || ta.placeholder;
+          div.style.cssText = `font-size:14px;line-height:1.5;color:${val?'#0F1419':'#8B98A5'};font-family:inherit;width:100%;word-break:break-word;white-space:pre-wrap;margin-top:10px;`;
+          ta.parentNode.replaceChild(div, ta);
+        });
+        // input → span
+        doc.querySelectorAll('input.t-num,input.fol-num,input.t-time,input.meta-in').forEach(inp => {
+          const span = doc.createElement('span');
+          span.textContent = inp.value;
+          const cs = getComputedStyle(inp);
+          span.style.cssText = `font-size:${cs.fontSize};color:${cs.color};font-family:${cs.fontFamily};font-weight:${cs.fontWeight};white-space:nowrap;`;
+          inp.parentNode.replaceChild(span, inp);
+        });
+      }
     });
-
-    document.body.removeChild(iframe);
 
     // 흰 여백
     const PAD = 80;
@@ -782,6 +716,14 @@ async function saveCard() {
     showToast('⚠️ 저장 실패: ' + err.message, 5000);
   }
 
+  // 복원
+  document.body.style.width = prevBodyW;
+  document.body.style.overflow = prevBodyOverflow;
+  card.style.width = prevCardW;
+  card.style.maxWidth = prevCardMax;
+  card.style.minWidth = prevCardMin;
+  hideEls.forEach(el => { el.style.display = el.dataset.prev || ''; });
+  ces.forEach(el => el.setAttribute('contenteditable', 'true'));
   btn.disabled = false; btn.textContent = 'PNG 저장';
 }
 
