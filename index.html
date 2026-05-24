@@ -633,14 +633,13 @@ async function saveCard() {
   ces.forEach(el => el.setAttribute('contenteditable', 'false'));
   document.activeElement?.blur();
 
-  // 모바일/PC 모두 카드 현재 너비로 고정 후 캡처
+  // PC는 380px 고정, 모바일은 실제 렌더링 너비 사용
   const isMobile = window.innerWidth <= 768;
   const prevWidth = card.style.width;
   const prevMaxWidth = card.style.maxWidth;
   const prevMinWidth = card.style.minWidth;
 
-  // 현재 렌더링된 카드 너비 측정
-  const targetW = Math.round(card.getBoundingClientRect().width);
+  const targetW = isMobile ? Math.round(card.getBoundingClientRect().width) : 380;
   card.style.width = targetW + 'px';
   card.style.maxWidth = targetW + 'px';
   card.style.minWidth = targetW + 'px';
